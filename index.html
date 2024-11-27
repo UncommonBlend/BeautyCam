@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+
+<!-- <p>
+This version is working start. Auto loads and asks for camera permission.
+Shows logo bug on screen but doesn't record it to video yet
+Record function is working
+</p> -->
+
+
+
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -14,7 +25,11 @@
             <canvas id="canvas"></canvas>
             <img src="StrongLogo.png" alt="Logo" class="logo" id="logo">
             <div class="recording-overlay" id="recordingOverlay">REC 00:00</div>
-            <button id="switchCamera" style="display: none;" title="Switch Camera">🔄</button>
+            <button id="switchCamera" style="display: none;" aria-label="Switch Camera">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"/>
+                </svg>
+            </button>
         </div>
         <div class="controls">
             <div class="recording-controls">
@@ -24,14 +39,13 @@
         </div>
         <div class="filter-controls">
             <label class="beauty-toggle">
-                <input type="checkbox" id="beautyToggle" title="Enable/Disable beauty filter">
+                <input type="checkbox" id="beautyToggle">
                 Beauty Filter
             </label>
             <div class="slider-container">
                 <span>Strength:</span>
                 <input type="range" id="beautyStrength" class="filter-slider" 
-                       min="0" max="100" value="50" disabled 
-                       title="Adjust beauty filter strength">
+                       min="0" max="100" value="50" disabled>
                 <span id="strengthValue">50%</span>
             </div>
         </div>
@@ -41,7 +55,6 @@
         </div>
     </div>
 
-    <!-- Shader scripts -->
     <script id="vertexShader" type="x-shader/x-vertex">
         attribute vec2 a_position;
         attribute vec2 a_texCoord;
