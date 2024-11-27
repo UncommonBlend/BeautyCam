@@ -20,9 +20,11 @@ let gl;
 let beautyProgram;
 let beautyEnabled = false;
 let beautyStrength = 0.5;
+let offscreenCanvas;
 
-const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const isOlderIOS = isMobile && /OS ([0-9]+)_/.test(navigator.userAgent) && parseInt(RegExp.$1) < 15;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isOldIOS = isMobile && /iPhone|iPad|iPod/.test(navigator.userAgent) && 
+                 /OS [1-9]|1[0-4]_[0-2]/.test(navigator.userAgent);
 
 async function loadModel() {
     try {
@@ -105,30 +107,18 @@ function createProgram(gl, vertexShader, fragmentShader) {
 async function setupCamera() {
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Camera API is not supported in this browser');
+            throw new Error('Camera API not available');
         }
 
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
         }
 
-        let constraints;
-        if (isOlderIOS) {
-            // Simplified constraints for older iOS
-            constraints = {
-                video: true,
-                audio: true
-            };
-        } else {
-            constraints = {
-                video: {
-                    facingMode: facingMode,
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                },
-                audio: true
-            };
-        }
+        // Simpler constraints for older iOS
+        const constraints = {
+            video: true,
+            audio: true
+        };
 
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
@@ -139,33 +129,40 @@ async function setupCamera() {
                 canvas.height = video.videoHeight;
                 video.play();
                 
-                // Only setup MediaRecorder if supported
-                if (window.MediaRecorder) {
+                // Initialize offscreen canvas
+                if (!offscreenCanvas) {
+                    offscreenCanvas = document.createElement('canvas');
+                    offscreenCanvas.width = canvas.width;
+                    offscreenCanvas.height = canvas.height;
+                }
+                
+                // Check if recording is supported
+                if (typeof MediaRecorder !== 'undefined') {
                     setupMediaRecorder();
                 } else {
-                    console.warn('MediaRecorder not supported in this browser');
+                    console.warn('Recording not supported on this device');
                     recordButton.style.display = 'none';
                 }
                 resolve();
             };
         });
     } catch (error) {
-        showError('Failed to access camera: ' + error.message);
         console.error('Camera Setup Error:', error);
     }
 }
 
 function setupMediaRecorder() {
     try {
-        if (!window.MediaRecorder) {
-            console.warn('MediaRecorder not supported');
-            recordButton.style.display = 'none';
-            return;
+        const canvasStream = canvas.captureStream();
+        
+        // Add audio track from original stream
+        const audioTrack = currentStream.getAudioTracks()[0];
+        if (audioTrack) {
+            canvasStream.addTrack(audioTrack);
         }
 
         let options = { mimeType: 'video/webm' };
         
-        // Try different MIME types
         if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
             options = { mimeType: 'video/webm;codecs=vp9,opus' };
         } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
@@ -174,7 +171,7 @@ function setupMediaRecorder() {
             options = { mimeType: 'video/mp4' };
         }
 
-        mediaRecorder = new MediaRecorder(currentStream, options);
+        mediaRecorder = new MediaRecorder(canvasStream, options);
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
@@ -183,9 +180,7 @@ function setupMediaRecorder() {
         };
 
         mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, {
-                type: 'video/webm'
-            });
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -225,13 +220,7 @@ async function detectObjects() {
     try {
         const predictions = await model.detect(video);
         
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = canvas.width;
-        offscreenCanvas.height = canvas.height;
         const offscreenCtx = offscreenCanvas.getContext('2d');
-        
-        // Clear the canvas first
-        offscreenCtx.clearRect(0, 0, canvas.width, canvas.height);
         
         if (beautyEnabled && gl && beautyProgram) {
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -326,7 +315,7 @@ recordButton.addEventListener('click', () => {
         mediaRecorder.start(1000);
         isRecording = true;
         document.getElementById('recordingOverlay').classList.add('active');
-        recordButton.innerHTML = '<span style="font-size: 32px; display: flex; align-items: center; justify-content: center; height: 100%;">■</span>';
+        recordButton.innerHTML = '<span style="font-size: 32px;">■</span>';
         recordButton.classList.add('recording');
         recordingStartTime = Date.now();
         recordingTimer = setInterval(updateRecordingTimer, 1000);
