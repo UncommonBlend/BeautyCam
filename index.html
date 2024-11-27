@@ -1,13 +1,3 @@
-<!DOCTYPE html>
-
-<!-- <p>
-This version is working start. Auto loads and asks for camera permission.
-Shows logo bug on screen but doesn't record it to video yet
-Record function is working
-</p> -->
-
-
-
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -24,9 +14,9 @@ Record function is working
             <canvas id="canvas"></canvas>
             <img src="StrongLogo.png" alt="Logo" class="logo" id="logo">
             <div class="recording-overlay" id="recordingOverlay">REC 00:00</div>
+            <button id="switchCamera" style="display: none;" title="Switch Camera">🔄</button>
         </div>
         <div class="controls">
-            <button id="switchCamera" style="display: none;" title="Switch between front and back camera">Switch Camera</button>
             <div class="recording-controls">
                 <button id="recordButton" class="record-button" title="Start/Stop Recording"></button>
                 <span id="recordingTimer" class="recording-timer"></span>
