@@ -11,12 +11,7 @@ body {
 }
 
 :root {
-    --logo-width: 20%; /* Controls logo size as percentage of video width
-                          Suggested values:
-                          Small logo: 10%
-                          Medium logo: 20% 
-                          Large logo: 30%
-                          Adjust based on your needs */
+    --logo-width: 20%;
 }
 
 .container {
@@ -70,7 +65,6 @@ body {
     border-radius: 50%;
     background-color: rgba(0, 0, 0, 0.5);
     color: white;
-    font-size: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -78,6 +72,17 @@ body {
     border: 2px solid white;
     padding: 0;
     cursor: pointer;
+}
+
+#switchCamera svg {
+    width: 24px;
+    height: 24px;
+    stroke: white;
+    fill: white;
+}
+
+#switchCamera:active {
+    background-color: rgba(0, 0, 0, 0.7);
 }
 
 .detection-list {
@@ -115,7 +120,7 @@ body {
     color: #ff4444;
     padding: 10px;
     text-align: center;
-    background: #ffe6e6;
+    background: rgba(255, 68, 68, 0.1);
     border-radius: 5px;
     margin: 10px 0;
 }
@@ -163,6 +168,7 @@ body {
     transform: translateY(-50%);
     font-size: 14px;
     color: #fff;
+    white-space: nowrap;
 }
 
 .recording-overlay {
@@ -187,7 +193,7 @@ body {
     align-items: center;
     gap: 15px;
     margin-top: 10px;
-    padding: 10px;
+    padding: 10px 20px;
     background: #2d2d2d;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -240,7 +246,6 @@ body {
     }
 
     #switchCamera {
-        position: fixed;
         top: 20px;
         right: 20px;
     }
