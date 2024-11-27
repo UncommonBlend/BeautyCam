@@ -22,15 +22,25 @@ let beautyEnabled = false;
 let beautyStrength = 0.5;
 let offscreenCanvas;
 
+function debugLog(message) {
+    const debugMessages = document.getElementById('debugMessages');
+    const timestamp = new Date().toLocaleTimeString();
+    debugMessages.innerHTML = `${timestamp}: ${message}<br>` + debugMessages.innerHTML;
+    console.log(message);
+}
+
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const isOldIOS = isMobile && /iPhone|iPad|iPod/.test(navigator.userAgent) && 
-                 /OS [1-9]|1[0-4]_[0-2]/.test(navigator.userAgent);
+                 /OS [1-9]|1[0-4]_/.test(navigator.userAgent);
 
 async function loadModel() {
     try {
+        debugLog('Loading object detection model...');
         model = await cocoSsd.load();
+        debugLog('Model loaded successfully');
         startDetection();
     } catch (error) {
+        debugLog('Failed to load model: ' + error.message);
         showError('Failed to load object detection model: ' + error.message);
     }
 }
@@ -42,7 +52,7 @@ function setupBeautyFilter() {
     gl = glCanvas.getContext('webgl');
 
     if (!gl) {
-        console.error('WebGL not supported');
+        debugLog('WebGL not supported');
         return;
     }
 
@@ -76,6 +86,7 @@ function setupBeautyFilter() {
     gl.enableVertexAttribArray(texCoordLocation);
     gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
 
+    debugLog('Beauty filter setup complete');
     return glCanvas;
 }
 
@@ -84,7 +95,7 @@ function createShader(gl, type, source) {
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error(gl.getShaderInfoLog(shader));
+        debugLog('Shader compilation error: ' + gl.getShaderInfoLog(shader));
         gl.deleteShader(shader);
         return null;
     }
@@ -97,15 +108,17 @@ function createProgram(gl, vertexShader, fragmentShader) {
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error(gl.getProgramInfoLog(program));
+        debugLog('Program linking error: ' + gl.getProgramInfoLog(program));
         gl.deleteProgram(program);
         return null;
     }
     return program;
 }
 
+
 async function setupCamera() {
     try {
+        debugLog('Setting up camera...');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('Camera API not available');
         }
@@ -114,12 +127,14 @@ async function setupCamera() {
             currentStream.getTracks().forEach(track => track.stop());
         }
 
-        // Simpler constraints for older iOS
         const constraints = {
-            video: true,
+            video: {
+                facingMode: facingMode
+            },
             audio: true
         };
 
+        debugLog(`Requesting camera access with facing mode: ${facingMode}`);
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
 
@@ -129,91 +144,112 @@ async function setupCamera() {
                 canvas.height = video.videoHeight;
                 video.play();
                 
-                // Initialize offscreen canvas
                 if (!offscreenCanvas) {
                     offscreenCanvas = document.createElement('canvas');
                     offscreenCanvas.width = canvas.width;
                     offscreenCanvas.height = canvas.height;
                 }
                 
-                // Check if recording is supported
                 if (typeof MediaRecorder !== 'undefined') {
+                    debugLog('MediaRecorder is supported, setting up recording...');
                     setupMediaRecorder();
                 } else {
-                    console.warn('Recording not supported on this device');
-                    recordButton.style.display = 'none';
+                    debugLog('MediaRecorder is not supported on this device');
+                    const recordingControls = document.querySelector('.recording-controls');
+                    if (recordingControls) {
+                        recordingControls.style.display = 'none';
+                    }
                 }
                 resolve();
+                debugLog('Camera setup complete');
             };
         });
     } catch (error) {
-        console.error('Camera Setup Error:', error);
+        debugLog('Camera Setup Error: ' + error.message);
+        showError('Camera access failed: ' + error.message);
     }
 }
 
 function setupMediaRecorder() {
     try {
-        const canvasStream = canvas.captureStream();
+        debugLog('Setting up MediaRecorder...');
+        const canvasStream = canvas.captureStream(30);
+        debugLog('Canvas stream created at 30 FPS');
         
-        // Add audio track from original stream
         const audioTrack = currentStream.getAudioTracks()[0];
         if (audioTrack) {
+            debugLog('Audio track found and added to stream');
             canvasStream.addTrack(audioTrack);
         }
 
-        let options = { mimeType: 'video/webm' };
-        
-        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-            options = { mimeType: 'video/webm;codecs=vp9,opus' };
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-            options = { mimeType: 'video/webm;codecs=vp8,opus' };
-        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-            options = { mimeType: 'video/mp4' };
+        const mimeTypes = [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4'
+        ];
+
+        let selectedMimeType = null;
+        for (const mimeType of mimeTypes) {
+            if (MediaRecorder.isTypeSupported(mimeType)) {
+                selectedMimeType = mimeType;
+                debugLog(`Selected MIME type: ${mimeType}`);
+                break;
+            }
         }
 
-        mediaRecorder = new MediaRecorder(canvasStream, options);
+        if (!selectedMimeType) {
+            throw new Error('No supported mime type found');
+        }
+
+        mediaRecorder = new MediaRecorder(canvasStream, {
+            mimeType: selectedMimeType,
+            videoBitsPerSecond: 2500000
+        });
 
         mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
+            debugLog(`Data available: ${event.data.size} bytes`);
+            if (event.data && event.data.size > 0) {
                 recordedChunks.push(event.data);
             }
         };
 
         mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            debugLog(`Recording stopped, ${recordedChunks.length} chunks collected`);
+            if (recordedChunks.length === 0) {
+                debugLog('Error: No data was recorded');
+                showError('No data was recorded');
+                return;
+            }
+
+            const fileExtension = selectedMimeType.includes('mp4') ? 'mp4' : 'webm';
+            const blob = new Blob(recordedChunks, { type: selectedMimeType });
+            debugLog(`Created blob of size: ${blob.size} bytes`);
+
+            if (blob.size === 0) {
+                debugLog('Error: Recording resulted in empty file');
+                showError('Recording failed: Empty file');
+                return;
+            }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `recording-${new Date().toISOString()}.webm`;
+            a.download = `recording-${new Date().toISOString()}.${fileExtension}`;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
             recordedChunks = [];
+            debugLog('Recording saved and downloaded');
         };
+
+        debugLog('MediaRecorder setup complete');
     } catch (error) {
-        console.warn('MediaRecorder setup failed:', error);
+        debugLog('MediaRecorder setup failed: ' + error.message);
         recordButton.style.display = 'none';
+        showError('Recording setup failed: ' + error.message);
     }
-}
-
-function updateRecordingTimer() {
-    if (!recordingStartTime) return;
-    
-    const elapsed = Date.now() - recordingStartTime;
-    const seconds = Math.floor(elapsed / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    const timeString = `REC ${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    
-    recordingTimerDisplay.textContent = timeString;
-    document.getElementById('recordingOverlay').textContent = timeString;
-}
-
-function showError(message) {
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-message';
-    errorDiv.textContent = message;
-    document.body.insertBefore(errorDiv, document.body.firstChild);
-    setTimeout(() => errorDiv.remove(), 5000);
 }
 
 async function detectObjects() {
@@ -281,7 +317,7 @@ async function detectObjects() {
             }
         });
     } catch (error) {
-        console.error('Detection error:', error);
+        debugLog('Detection error: ' + error.message);
     }
 }
 
@@ -301,56 +337,120 @@ function startDetection() {
     detectionInterval = setInterval(detectObjects, 500);
 }
 
+
+function updateRecordingTimer() {
+    if (!recordingStartTime) return;
+    
+    const elapsed = Date.now() - recordingStartTime;
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    const timeString = `REC ${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    
+    recordingTimerDisplay.textContent = timeString;
+    document.getElementById('recordingOverlay').textContent = timeString;
+}
+
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    document.body.insertBefore(errorDiv, document.body.firstChild);
+    setTimeout(() => errorDiv.remove(), 5000);
+}
+
+// Event Listeners
 if (isMobile) {
     switchCameraButton.style.display = 'flex';
     switchCameraButton.addEventListener('click', async () => {
-        facingMode = facingMode === 'user' ? 'environment' : 'user';
-        await setupCamera();
+        try {
+            debugLog('Switching camera...');
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            facingMode = facingMode === 'user' ? 'environment' : 'user';
+            debugLog(`New facing mode: ${facingMode}`);
+            await setupCamera();
+        } catch (error) {
+            debugLog('Failed to switch camera: ' + error.message);
+            showError('Failed to switch camera. Please try again.');
+        }
     });
 }
 
 recordButton.addEventListener('click', () => {
     if (!isRecording) {
         recordedChunks = [];
-        mediaRecorder.start(1000);
-        isRecording = true;
-        document.getElementById('recordingOverlay').classList.add('active');
-        recordButton.innerHTML = '<span style="font-size: 32px;">■</span>';
-        recordButton.classList.add('recording');
-        recordingStartTime = Date.now();
-        recordingTimer = setInterval(updateRecordingTimer, 1000);
+        try {
+            debugLog('Starting recording...');
+            mediaRecorder.start(1000);
+            isRecording = true;
+            document.getElementById('recordingOverlay').classList.add('active');
+            recordButton.innerHTML = '<span style="font-size: 32px;">■</span>';
+            recordButton.classList.add('recording');
+            recordingStartTime = Date.now();
+            recordingTimer = setInterval(updateRecordingTimer, 1000);
+            debugLog('Recording started successfully');
+        } catch (error) {
+            debugLog('Failed to start recording: ' + error.message);
+            showError('Failed to start recording: ' + error.message);
+        }
     } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        document.getElementById('recordingOverlay').classList.remove('active');
-        recordButton.innerHTML = '';
-        recordButton.classList.remove('recording');
-        clearInterval(recordingTimer);
-        recordingTimerDisplay.textContent = '';
+        try {
+            debugLog('Stopping recording...');
+            mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById('recordingOverlay').classList.remove('active');
+            recordButton.innerHTML = '';
+            recordButton.classList.remove('recording');
+            clearInterval(recordingTimer);
+            recordingTimerDisplay.textContent = '';
+            debugLog('Recording stopped successfully');
+        } catch (error) {
+            debugLog('Failed to stop recording: ' + error.message);
+            showError('Failed to stop recording: ' + error.message);
+        }
     }
 });
 
 document.getElementById('beautyToggle').addEventListener('change', (e) => {
     beautyEnabled = e.target.checked;
     document.getElementById('beautyStrength').disabled = !beautyEnabled;
+    debugLog(`Beauty filter ${beautyEnabled ? 'enabled' : 'disabled'}`);
 });
 
 document.getElementById('beautyStrength').addEventListener('input', (e) => {
     beautyStrength = e.target.value / 100;
     document.getElementById('strengthValue').textContent = `${e.target.value}%`;
+    debugLog(`Beauty strength set to ${e.target.value}%`);
 });
 
 document.getElementById('logo').onerror = function() {
     this.style.display = 'none';
-    console.error('Failed to load logo image');
+    debugLog('Failed to load logo image');
 };
+
+function checkRecordingSupport() {
+    const isSupported = typeof MediaRecorder !== 'undefined';
+    const recordingControls = document.querySelector('.recording-controls');
+    
+    if (!isSupported) {
+        debugLog('MediaRecorder is not supported on this device');
+        recordingControls.style.display = 'none';
+        showError('Recording is not supported on this device. iOS 14.3 or higher is required for recording.');
+    }
+}
 
 async function init() {
     try {
+        debugLog('Initializing application...');
         await setupCamera();
         await loadModel();
         setupBeautyFilter();
+        checkRecordingSupport();
+        debugLog('Initialization complete');
     } catch (error) {
+        debugLog('Initialization error: ' + error.message);
         showError('Initialization error: ' + error.message);
     }
 }
