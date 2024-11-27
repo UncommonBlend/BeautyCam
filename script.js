@@ -135,9 +135,21 @@ async function setupCamera() {
 
 function setupMediaRecorder() {
     try {
-        mediaRecorder = new MediaRecorder(currentStream, {
-            mimeType: 'video/webm;codecs=vp9,opus'
-        });
+        if (!window.MediaRecorder) {
+            throw new Error('MediaRecorder is not supported in this browser');
+        }
+
+        // Check for supported MIME types
+        let options;
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+            options = { mimeType: 'video/webm;codecs=vp9,opus' };
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+            options = { mimeType: 'video/webm;codecs=vp8,opus' };
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+            options = { mimeType: 'video/webm' };
+        }
+
+        mediaRecorder = new MediaRecorder(currentStream, options);
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
@@ -159,6 +171,7 @@ function setupMediaRecorder() {
         };
     } catch (error) {
         showError('Failed to setup media recorder: ' + error.message);
+        console.error('MediaRecorder Error:', error);
     }
 }
 
@@ -191,6 +204,9 @@ async function detectObjects() {
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
         const offscreenCtx = offscreenCanvas.getContext('2d');
+        
+        // Clear the canvas first
+        offscreenCtx.clearRect(0, 0, canvas.width, canvas.height);
         
         if (beautyEnabled && gl && beautyProgram) {
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -285,7 +301,7 @@ recordButton.addEventListener('click', () => {
         mediaRecorder.start(1000);
         isRecording = true;
         document.getElementById('recordingOverlay').classList.add('active');
-        recordButton.innerHTML = '<span style="font-size: 24px; line-height: 24px;">■</span>'; // Bigger stop symbol
+        recordButton.innerHTML = '<span style="font-size: 32px; display: flex; align-items: center; justify-content: center; height: 100%;">■</span>';
         recordButton.classList.add('recording');
         recordingStartTime = Date.now();
         recordingTimer = setInterval(updateRecordingTimer, 1000);
