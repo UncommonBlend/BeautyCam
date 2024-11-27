@@ -21,7 +21,8 @@ let beautyProgram;
 let beautyEnabled = false;
 let beautyStrength = 0.5;
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isOlderIOS = isMobile && /OS ([0-9]+)_/.test(navigator.userAgent) && parseInt(RegExp.$1) < 15;
 
 async function loadModel() {
     try {
@@ -103,18 +104,31 @@ function createProgram(gl, vertexShader, fragmentShader) {
 
 async function setupCamera() {
     try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera API is not supported in this browser');
+        }
+
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
         }
 
-        const constraints = {
-            video: {
-                facingMode: facingMode,
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            },
-            audio: true
-        };
+        let constraints;
+        if (isOlderIOS) {
+            // Simplified constraints for older iOS
+            constraints = {
+                video: true,
+                audio: true
+            };
+        } else {
+            constraints = {
+                video: {
+                    facingMode: facingMode,
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                },
+                audio: true
+            };
+        }
 
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
@@ -124,29 +138,40 @@ async function setupCamera() {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 video.play();
-                setupMediaRecorder();
+                
+                // Only setup MediaRecorder if supported
+                if (window.MediaRecorder) {
+                    setupMediaRecorder();
+                } else {
+                    console.warn('MediaRecorder not supported in this browser');
+                    recordButton.style.display = 'none';
+                }
                 resolve();
             };
         });
     } catch (error) {
         showError('Failed to access camera: ' + error.message);
+        console.error('Camera Setup Error:', error);
     }
 }
 
 function setupMediaRecorder() {
     try {
         if (!window.MediaRecorder) {
-            throw new Error('MediaRecorder is not supported in this browser');
+            console.warn('MediaRecorder not supported');
+            recordButton.style.display = 'none';
+            return;
         }
 
-        // Check for supported MIME types
-        let options;
+        let options = { mimeType: 'video/webm' };
+        
+        // Try different MIME types
         if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
             options = { mimeType: 'video/webm;codecs=vp9,opus' };
         } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
             options = { mimeType: 'video/webm;codecs=vp8,opus' };
-        } else if (MediaRecorder.isTypeSupported('video/webm')) {
-            options = { mimeType: 'video/webm' };
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { mimeType: 'video/mp4' };
         }
 
         mediaRecorder = new MediaRecorder(currentStream, options);
@@ -170,8 +195,8 @@ function setupMediaRecorder() {
             recordedChunks = [];
         };
     } catch (error) {
-        showError('Failed to setup media recorder: ' + error.message);
-        console.error('MediaRecorder Error:', error);
+        console.warn('MediaRecorder setup failed:', error);
+        recordButton.style.display = 'none';
     }
 }
 
@@ -288,7 +313,7 @@ function startDetection() {
 }
 
 if (isMobile) {
-    switchCameraButton.style.display = 'block';
+    switchCameraButton.style.display = 'flex';
     switchCameraButton.addEventListener('click', async () => {
         facingMode = facingMode === 'user' ? 'environment' : 'user';
         await setupCamera();
