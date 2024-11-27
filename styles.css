@@ -102,11 +102,12 @@ body {
 }
 
 .controls {
-    margin-top: 10px;
+    position: relative;
+    width: 100%;
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
     justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
 }
 
 button {
@@ -123,10 +124,18 @@ button:hover {
     background-color: #555;
 }
 
+#switchCamera {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
 .recording-controls {
+    position: relative;
     display: flex;
+    align-items: center;
     gap: 10px;
-    margin-top: 10px;
 }
 
 .record-button {
@@ -140,6 +149,7 @@ button:hover {
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    position: relative;
 }
 
 .record-button.recording {
@@ -148,16 +158,19 @@ button:hover {
 }
 
 .recording-timer {
+    position: absolute;
+    left: 70px;
+    top: 50%;
+    transform: translateY(-50%);
     font-size: 14px;
     color: #fff;
-    margin-left: 10px;
 }
 
 .recording-overlay {
     position: absolute;
     top: 20px;
     left: 20px;
-    background-color: #ff4444; /* Changed from rgba(0, 0, 0, 0.7) to match record button */
+    background-color: #ff4444;
     color: white;
     padding: 8px 15px;
     border-radius: 20px;
@@ -171,6 +184,9 @@ button:hover {
 }
 
 .filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
     margin-top: 10px;
     padding: 10px;
     background: #2d2d2d;
@@ -184,7 +200,7 @@ button:hover {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 10px 0;
+    flex: 1;
 }
 
 .filter-slider {
@@ -206,6 +222,7 @@ button:hover {
 
 .beauty-toggle {
     margin-right: 10px;
+    white-space: nowrap;
 }
 
 @keyframes pulse {
@@ -225,5 +242,12 @@ button:hover {
 
     .filter-controls {
         max-width: calc(100% - 20px);
+    }
+
+    #switchCamera {
+        position: absolute;
+        top: -50px;
+        right: 10px;
+        transform: none;
     }
 }
